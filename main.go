@@ -59,13 +59,13 @@ func makeScreen(srv *nui.Server, state *State, clientID int) *nui.Screen {
 	for playerIdx, player := range state.players {
 		if state.clients[clientID] != playerIdx {
 			format := nui.Format{Fg: nui.Color(playerIdx + 61), Bg: nui.Black}
-			label := &nui.Label{X: 8, Y: 5 + playerIdx, Format: format, Text: player.name, Max: 16}
+			label := &nui.Label{X: 8, Y: 5 + uint16(playerIdx), Format: format, Text: player.name}
 			screen.Widgets = append(screen.Widgets, label)
 		} else {
 			playerIdx := playerIdx
 			format := nui.Format{Fg: nui.Color(playerIdx + 61), Bg: nui.Black, Bold: true}
 			entry := &nui.Entry{
-				X: 8, Y: 5 + playerIdx, Format: format, Text: player.name, Max: 16,
+				X: 8, Y: 5 + uint16(playerIdx), Format: format, Text: player.name, Max: 16,
 
 				HandleInput: func(name string) {
 					state.players[playerIdx].name = name
@@ -108,6 +108,7 @@ func main() {
 	log.Println("localhost:6567")
 
 	srv := nui.NewServer(ln)
+	srv.TermWidth = 128
 	srv.HandleConnect = func(clientID int) {
 		log.Printf("event: connect [%d]\n", clientID)
 

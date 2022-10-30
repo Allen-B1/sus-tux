@@ -1,76 +1,21 @@
 package nui
 
 import (
-	"fmt"
-	"net"
-	"strings"
 	"unicode"
 )
 
-type Color int8
-
-const (
-	Black   Color = 0
-	Red     Color = 1
-	Green   Color = 2
-	Yellow  Color = 3
-	Blue    Color = 4
-	Magenta Color = 5
-	Cyan    Color = 6
-	White   Color = 7
-	Default Color = 9
-
-	LightBlack   Color = 60
-	LightRed     Color = 61
-	LightGreen   Color = 62
-	LightYellow  Color = 63
-	LightBlue    Color = 64
-	LightMagenta Color = 65
-	LightCyan    Color = 66
-	LightWhite   Color = 67
-)
-
-type Format struct {
-	Fg        Color
-	Bg        Color
-	Bold      bool
-	Underline bool
-}
-
-func (f Format) Apply(conn net.Conn) {
-	if f.Bold {
-		fmt.Fprint(conn, "\x1b[1m")
-	} else {
-		fmt.Fprint(conn, "\x1b[22m")
-	}
-	if f.Underline {
-		fmt.Fprint(conn, "\x1b[4m")
-	} else {
-		fmt.Fprint(conn, "\x1b[24m")
-	}
-	fmt.Fprintf(conn, "\x1b[%dm", int(f.Fg)+30)
-	fmt.Fprintf(conn, "\x1b[%dm", int(f.Bg)+40)
-
-}
-
 type Label struct {
-	X      int
-	Y      int
+	X      uint16
+	Y      uint16
 	Format Format
 	Text   string
-
-	// If Max > 0, then the remaining
-	// Max - len(Text) spots will be
-	// filled with spaces
-	Max int
 }
 
-func (l *Label) Draw(conn net.Conn) {
-	fmt.Fprintf(conn, "\x1b[%d;%dH", l.Y, l.X)
-	l.Format.Apply(conn)
-	fmt.Fprint(conn, l.Text)
-	if l.Max > 0 {
-		fmt.Fprint(conn, strings.Repeat(" ", l.Max-len(l.Text)))
+func (l *Label) Draw(buf *Buffer) {
+	idx := buf.Index(l.X, l.Y)
+	for i, c := range []byte(l.Text) {
+		buf.Chars[idx+i] = c
+		buf.Formats[idx+i] = l.Format
 	}
 }
 
@@ -79,8 +24,8 @@ func (l *Label) Draw(conn net.Conn) {
 // Note: When the event handlers are called,
 // the screen that this widget belongs to is write-locked.
 type Entry struct {
-	X      int
-	Y      int
+	X      uint16
+	Y      uint16
 	Format Format
 	Text   string
 	Max    int
@@ -89,12 +34,21 @@ type Entry struct {
 	HandleEnter func(text string)
 }
 
-func (e *Entry) Draw(conn net.Conn) {
-	fmt.Fprintf(conn, "\x1b[%d;%dH", e.Y, e.X)
-	e.Format.Apply(conn)
-	fmt.Fprint(conn, e.Text)
-	fmt.Fprint(conn, strings.Repeat(" ", e.Max-len(e.Text)))
-	fmt.Fprintf(conn, "\x1b[%d;%dH", e.Y, e.X+len(e.Text))
+func (e *Entry) Draw(buf *Buffer) {
+	idx := buf.Index(e.X, e.Y)
+	for i := 0; i < e.Max; i++ {
+		c := byte(' ')
+		if i < len(e.Text) {
+			c = e.Text[i]
+		}
+
+		buf.Chars[idx+i] = c
+		buf.Formats[idx+i] = e.Format
+	}
+
+	buf.CursorX = e.X + uint16(len(e.Text))
+	buf.CursorY = e.Y
+	buf.CursorFormat = e.Format
 }
 
 func (e *Entry) Focus(focus bool) {}
@@ -124,24 +78,41 @@ func (e *Entry) Keypress(ch byte) {
 // Note: When the event handlers are called,
 // the screen that this widget belongs to is write-locked.
 type Button struct {
-	X      int
-	Y      int
+	X      uint16
+	Y      uint16
 	Format Format
 	Text   string
 
 	HandleClick func()
 }
 
-func (b *Button) Draw(conn net.Conn) {
-	b.Format.Apply(conn)
+func (b *Button) Draw(buf *Buffer) {
+	for x := b.X; x < b.X+uint16(len(b.Text))+4; x++ {
+		idx := buf.Index(x, b.Y)
+		buf.Chars[idx] = ' '
+		buf.Formats[idx] = b.Format
+	}
 
-	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y, b.X)
-	fmt.Fprint(conn, strings.Repeat(" ", len(b.Text)+4))
-	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+1, b.X)
-	fmt.Fprint(conn, "  "+b.Text+"  ")
-	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+2, b.X)
-	fmt.Fprint(conn, strings.Repeat(" ", len(b.Text)+4))
-	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+1, b.X+2+len(b.Text))
+	for x := b.X; x < b.X+uint16(len(b.Text))+4; x++ {
+		idx := buf.Index(x, b.Y+1)
+		buf.Formats[idx] = b.Format
+
+		if x < b.X+2 || x >= b.X+2+uint16(len(b.Text)) {
+			buf.Chars[idx] = ' '
+		} else {
+			buf.Chars[idx] = b.Text[int(x-b.X-2)]
+		}
+	}
+
+	for x := b.X; x < b.X+uint16(len(b.Text))+4; x++ {
+		idx := buf.Index(x, b.Y+2)
+		buf.Chars[idx] = ' '
+		buf.Formats[idx] = b.Format
+	}
+
+	buf.CursorX = b.X + 2 + uint16(len(b.Text))
+	buf.CursorY = b.Y + 1
+	buf.CursorFormat = b.Format
 }
 
 func (b *Button) Focus(focus bool) {}

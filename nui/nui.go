@@ -6,9 +6,66 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func clear(conn net.Conn) {
+	fmt.Fprint(conn, "\x1bc\x1b[40m\x1b[H\x1b[2J\x1b[3J")
+}
+
+// Type Buffer represents information about
+// the output of a terminal screen.
+type Buffer struct {
+	Chars   []byte
+	Formats []Format
+	Width   uint16
+
+	CursorX, CursorY uint16
+	CursorFormat     Format
+}
+
+// Buffer initialized to all spaces, with a black background
+// and white foreground.
+func emptyBuffer(width uint16, height uint16) *Buffer {
+	buffer := &Buffer{
+		Width:   width,
+		Formats: make([]Format, width*height),
+		Chars:   make([]byte, width*height),
+	}
+
+	for i, _ := range buffer.Formats {
+		buffer.Formats[i] = Format{Fg: LightWhite, Bg: Black}
+	}
+	for i, _ := range buffer.Chars {
+		buffer.Chars[i] = ' '
+	}
+	buffer.CursorFormat = Format{Fg: LightWhite, Bg: Black}
+	return buffer
+}
+
+func (b Buffer) Index(x uint16, y uint16) int {
+	return int(y)*int(b.Width) + int(x)
+}
+
+type Widget interface {
+	// Draws the widget.
+	// If the widget is focusable, should also
+	// set the correct cursor position.
+	Draw(buf *Buffer)
+}
+
+// Represents a widget that can have focus, during
+// which events are delivered. When of these methods are called,
+// the screen belonging to the widget is write-locked.
+type FocusableWidget interface {
+	Widget
+	Focus(focus bool)
+
+	// Called when a key is pressed.
+	Keypress(byte)
+}
 
 type Screen struct {
 	Widgets []Widget
@@ -20,28 +77,59 @@ type Screen struct {
 	sync.RWMutex
 }
 
-func (s *Screen) Draw(conn net.Conn) {
+func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
+	newBuffer := emptyBuffer(oldBuffer.Width, uint16(len(oldBuffer.Chars))/oldBuffer.Width)
+
 	for idx, widget := range s.Widgets {
 		if idx == s.Focus {
 			continue
 		}
 
-		widget.Draw(conn)
+		widget.Draw(newBuffer)
 	}
 
 	if s.Focus >= 0 {
-		s.Widgets[s.Focus].Draw(conn)
+		s.Widgets[s.Focus].Draw(newBuffer)
 	}
-}
 
-func clear(conn net.Conn) {
-	fmt.Fprint(conn, "\x1bc\x1b[40m\x1b[H\x1b[2J\x1b[3J")
+	// diff
+	var prevFormat Format
+	var prevX, prevY uint16
+	firstDraw := true
+	msg := new(strings.Builder)
+	for idx := 0; idx < len(oldBuffer.Chars); idx++ {
+		if oldBuffer.Chars[idx] != newBuffer.Chars[idx] || oldBuffer.Formats[idx] != newBuffer.Formats[idx] {
+			x := uint16(idx % int(oldBuffer.Width))
+			y := uint16(idx / int(oldBuffer.Width))
+
+			if firstDraw || prevFormat != newBuffer.Formats[idx] {
+				newBuffer.Formats[idx].Apply(msg)
+			}
+			if firstDraw || !(prevX+1 == x && prevY == y) {
+				fmt.Fprintf(msg, "\x1b[%d;%dH", y, x)
+			}
+
+			fmt.Fprintf(msg, "%c", newBuffer.Chars[idx])
+
+			firstDraw = false
+		}
+	}
+
+	newBuffer.CursorFormat.Apply(msg)
+	fmt.Fprintf(msg, "\x1b[%d;%dH", newBuffer.CursorY, newBuffer.CursorX)
+
+	fmt.Fprint(conn, msg.String())
+
+	return newBuffer
 }
 
 type Server struct {
 	ln      net.Listener
 	screens sync.Map /* int => Screen */
 	clients int
+
+	TermWidth  uint16
+	TermHeight uint16
 
 	// Called when a new client connects.
 	// This function should call SetScreen
@@ -52,7 +140,9 @@ type Server struct {
 
 func NewServer(ln net.Listener) *Server {
 	return &Server{
-		ln: ln,
+		ln:         ln,
+		TermWidth:  64,
+		TermHeight: 48,
 	}
 }
 
@@ -102,7 +192,9 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 		log.Println("no screen found for client ID: ", clientID)
 	}
 	screen := screenI.(*Screen)
-	screen.Draw(conn)
+
+	buffer := emptyBuffer(s.TermWidth, s.TermHeight)
+	buffer = screen.Draw(conn, buffer)
 
 	buf := make([]byte, 1)
 	for {
@@ -161,28 +253,9 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 		}
 
 		screen.RLock()
-		clear(conn)
-		screen.Draw(conn)
+		buffer = screen.Draw(conn, buffer)
 		screen.RUnlock()
 	}
 
 	s.HandleDisconnect(clientID)
-}
-
-type Widget interface {
-	// Draws the widget.
-	// If the widget is focusable, should also
-	// set the correct cursor position.
-	Draw(conn net.Conn)
-}
-
-// Represents a widget that can have focus, during
-// which events are delivered. When of these methods are called,
-// the screen belonging to the widget is write-locked.
-type FocusableWidget interface {
-	Widget
-	Focus(focus bool)
-
-	// Called when a key is pressed.
-	Keypress(byte)
 }
