@@ -79,12 +79,11 @@ func (l *Label) Draw(conn net.Conn) {
 // Note: When the event handlers are called,
 // the screen that this widget belongs to is write-locked.
 type Entry struct {
-	X       int
-	Y       int
-	Format  Format
-	Text    string
-	Focused bool
-	Max     int
+	X      int
+	Y      int
+	Format Format
+	Text   string
+	Max    int
 
 	HandleInput func(text string)
 	HandleEnter func(text string)
@@ -98,11 +97,7 @@ func (e *Entry) Draw(conn net.Conn) {
 	fmt.Fprintf(conn, "\x1b[%d;%dH", e.Y, e.X+len(e.Text))
 }
 
-func (e *Entry) Focus(focus bool) {
-	if focus {
-		e.Focused = true
-	}
-}
+func (e *Entry) Focus(focus bool) {}
 
 func (e *Entry) Keypress(ch byte) {
 	if ch == '\b' || ch == 127 {
@@ -121,5 +116,37 @@ func (e *Entry) Keypress(ch byte) {
 		if e.HandleEnter != nil {
 			e.HandleEnter(e.Text)
 		}
+	}
+}
+
+// Represents a button.
+//
+// Note: When the event handlers are called,
+// the screen that this widget belongs to is write-locked.
+type Button struct {
+	X      int
+	Y      int
+	Format Format
+	Text   string
+
+	HandleClick func()
+}
+
+func (b *Button) Draw(conn net.Conn) {
+	b.Format.Apply(conn)
+
+	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y, b.X)
+	fmt.Fprint(conn, strings.Repeat(" ", len(b.Text)+4))
+	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+1, b.X)
+	fmt.Fprint(conn, "  "+b.Text+"  ")
+	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+2, b.X)
+	fmt.Fprint(conn, strings.Repeat(" ", len(b.Text)+4))
+	fmt.Fprintf(conn, "\x1b[%d;%dH", b.Y+1, b.X+2+len(b.Text))
+}
+
+func (b *Button) Focus(focus bool) {}
+func (b *Button) Keypress(ch byte) {
+	if ch == '\n' && b.HandleClick != nil {
+		b.HandleClick()
 	}
 }

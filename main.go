@@ -77,8 +77,22 @@ func makeScreen(srv *nui.Server, state *State, clientID int) *nui.Screen {
 		}
 	}
 
-	format := nui.Format{Fg: nui.LightWhite, Bg: nui.Black, Underline: true}
-	screen.Widgets = append(screen.Widgets, &nui.Label{X: 8, Y: 4, Format: format, Text: fmt.Sprintf("Players: %d", len(state.players))})
+	headerFormat := nui.Format{Fg: nui.LightWhite, Bg: nui.Black, Underline: true}
+	screen.Widgets = append(screen.Widgets, &nui.Label{X: 8, Y: 4, Format: headerFormat, Text: fmt.Sprintf("Players: %d", len(state.players))})
+
+	if state.clients[clientID] == 0 { // host
+		screen.Widgets = append(screen.Widgets, &nui.Label{
+			X: 64, Y: 4, Format: headerFormat, Text: "Host",
+		})
+		screen.Widgets = append(screen.Widgets, &nui.Button{
+			X: 62, Y: 6, Format: nui.Format{Bg: nui.Blue, Fg: nui.LightWhite}, Text: "Start",
+
+			HandleClick: func() {
+				// TODO: Start Game
+			},
+		})
+	}
+
 	return screen
 }
 
@@ -87,10 +101,11 @@ func main() {
 		clients: make(map[int]int),
 	}
 
-	ln, err := net.Listen("tcp", ":8080")
+	ln, err := net.Listen("tcp", ":6567")
 	if err != nil {
 		panic(err)
 	}
+	log.Println("localhost:6567")
 
 	srv := nui.NewServer(ln)
 	srv.HandleConnect = func(clientID int) {

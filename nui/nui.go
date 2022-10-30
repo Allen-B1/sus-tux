@@ -34,6 +34,10 @@ func (s *Screen) Draw(conn net.Conn) {
 	}
 }
 
+func clear(conn net.Conn) {
+	fmt.Fprint(conn, "\x1bc\x1b[40m\x1b[H\x1b[2J\x1b[3J")
+}
+
 type Server struct {
 	ln      net.Listener
 	screens sync.Map /* int => Screen */
@@ -90,8 +94,8 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 	s.HandleConnect(clientID)
 
 	// Send clear escape codes & codes to listen for mouse events
-	fmt.Fprint(conn, "\x1bc\x1b[40m\x1b[H\x1b[2J\x1b[3J")
-	fmt.Fprint(conn, "\x1b[?1000h")
+	clear(conn)
+	//	fmt.Fprint(conn, "\x1b[?1000h") // mouse events
 
 	screenI, ok := s.screens.Load(clientID)
 	if !ok {
@@ -126,7 +130,7 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 					}
 				}
 
-				endIdx := screen.Focus
+				endIdx := (screen.Focus + 1) % len(screen.Widgets)
 				if endIdx < 0 {
 					endIdx = 0
 				}
@@ -157,6 +161,7 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 		}
 
 		screen.RLock()
+		clear(conn)
 		screen.Draw(conn)
 		screen.RUnlock()
 	}
