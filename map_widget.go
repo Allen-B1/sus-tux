@@ -32,14 +32,19 @@ func (m *MapWidget) Draw(buf *nui.Buffer) {
 			mapX := int32(x-m.X) + offX
 			mapY := int32(y-m.Y) + offY
 
-			ch := byte(' ')
-			if mapX >= 0 && mapX < int32(m.Map.Width) &&
-				mapY >= 0 && mapY < int32(m.Map.Height()) {
+			var ch byte
+			if mapX >= 1 && mapX < int32(m.Map.Width)-1 &&
+				mapY >= 1 && mapY < int32(m.Map.Height())-1 {
 				ch = m.Map.Data[int(mapX+mapY*int32(m.Map.Width))]
+			} else {
+				ch = 0
 			}
 
 			buf.Chars[idx] = ch
-			if ch == ' ' {
+			if ch == 0 {
+				buf.Chars[idx] = ' '
+				buf.Formats[idx] = nui.Format{Bg: nui.LightBlack, Fg: nui.Black}
+			} else if ch == ' ' {
 				buf.Formats[idx] = nui.Format{Bg: nui.LightWhite, Fg: nui.LightWhite}
 			} else if ch == '+' {
 				buf.Formats[idx] = nui.Format{Bg: nui.LightBlack, Fg: nui.Black}
@@ -74,29 +79,13 @@ func (m *MapWidget) Focus(focus bool) {}
 
 func (m *MapWidget) Keypress(ch byte) {
 	if ch == 'w' {
-		if m.Direction[1] != -1 {
-			m.Direction[1] = -1
-		} else {
-			m.Direction[1] = 0
-		}
+		*m.Direction = [2]int8{0, -1}
 	} else if ch == 's' {
-		if m.Direction[1] != 1 {
-			m.Direction[1] = 1
-		} else {
-			m.Direction[1] = 0
-		}
+		*m.Direction = [2]int8{0, 1}
 	} else if ch == 'a' {
-		if m.Direction[0] != -1 {
-			m.Direction[0] = -1
-		} else {
-			m.Direction[0] = 0
-		}
+		*m.Direction = [2]int8{-1, 0}
 	} else if ch == 'd' {
-		if m.Direction[0] != 1 {
-			m.Direction[0] = 1
-		} else {
-			m.Direction[0] = 0
-		}
+		*m.Direction = [2]int8{1, 0}
 	} else if ch == 'q' {
 		m.Direction[0] = 0
 		m.Direction[1] = 0

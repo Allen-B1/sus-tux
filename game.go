@@ -32,7 +32,7 @@ type GamePlayer struct {
 	Tasks    []Task
 }
 
-func (p *GamePlayer) UpdatePosition() {
+func (p *GamePlayer) UpdatePosition() (uint32, uint32) {
 	x := int32(p.X) + int32(p.Direction[0])
 	y := int32(p.Y) + int32(p.Direction[1])
 
@@ -43,8 +43,7 @@ func (p *GamePlayer) UpdatePosition() {
 		y = 0
 	}
 
-	p.X = uint32(x)
-	p.Y = uint32(y)
+	return uint32(x), uint32(y)
 }
 
 type Game struct {
@@ -95,6 +94,11 @@ func (g *Game) makeScreen(playerIdx int) *nui.Screen {
 
 func (g *Game) Update() {
 	for i := range g.Players {
-		g.Players[i].UpdatePosition()
+		x, y := g.Players[i].UpdatePosition()
+		c := g.Map.Data[y*g.Map.Width+x]
+		if c == ' ' {
+			g.Players[i].X = x
+			g.Players[i].Y = y
+		}
 	}
 }
