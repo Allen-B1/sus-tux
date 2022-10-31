@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -174,6 +175,8 @@ func makeLobbyScreen(srv *nui.Server, state *State, clientID int) *nui.Screen {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	var state = State{
 		clients: make(map[int]int),
 	}
