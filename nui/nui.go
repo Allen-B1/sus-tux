@@ -197,7 +197,7 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 
 	buf := make([]byte, 1)
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Millisecond * 50))
+		conn.SetReadDeadline(time.Now().Add(time.Millisecond * 100))
 		_, err := conn.Read(buf)
 		if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 			break

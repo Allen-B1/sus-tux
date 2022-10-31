@@ -242,8 +242,8 @@ func main() {
 				srv.SetScreen(clientID, screen)
 			}
 		} else {
+			state.game.Kill(idx)
 			state.game.Players[idx].Disconnected = true
-			state.game.Players[idx].Dead = true
 		}
 	}
 	srv.Run()

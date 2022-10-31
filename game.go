@@ -33,17 +33,23 @@ type GamePlayer struct {
 	Tasks    []Task
 }
 
-func (p *GamePlayer) UpdatePositionX() uint32 {
+func (p *GamePlayer) UpdatePositionX(width uint32) uint32 {
 	x := int32(p.X) + int32(p.Direction[0])
 	if x < 0 {
 		x = 0
 	}
+	if uint32(x) >= width {
+		x = int32(width - 1)
+	}
 	return uint32(x)
 }
-func (p *GamePlayer) UpdatePositionY() uint32 {
+func (p *GamePlayer) UpdatePositionY(height uint32) uint32 {
 	y := int32(p.Y) + int32(p.Direction[1])
 	if y < 0 {
 		y = 0
+	}
+	if uint32(y) >= height {
+		y = int32(height - 1)
 	}
 	return uint32(y)
 }
@@ -76,10 +82,10 @@ func NewGame(nplayers int, map_ *Map) *Game {
 
 func (g *Game) Update(step uint) {
 	for i, player := range g.Players {
-		x := g.Players[i].UpdatePositionX()
+		x := g.Players[i].UpdatePositionX(g.Map.Width)
 		y := g.Players[i].Y
 		if step%2 == 0 {
-			y = g.Players[i].UpdatePositionY()
+			y = g.Players[i].UpdatePositionY(g.Map.Height())
 		}
 		c := g.Map.Data[y*g.Map.Width+x]
 		if c == ' ' || player.Dead {
