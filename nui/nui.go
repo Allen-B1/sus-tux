@@ -102,14 +102,18 @@ func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
 			x := uint16(idx % int(oldBuffer.Width))
 			y := uint16(idx / int(oldBuffer.Width))
 
-			if firstDraw || prevFormat != newBuffer.Formats[idx] {
-				newBuffer.Formats[idx].Apply(msg)
-			}
 			if firstDraw || !(prevX+1 == x && prevY == y) {
 				fmt.Fprintf(msg, "\x1b[%d;%dH", y, x)
 			}
+			if firstDraw || prevFormat != newBuffer.Formats[idx] {
+				newBuffer.Formats[idx].Apply(msg)
+			}
 
 			fmt.Fprintf(msg, "%c", newBuffer.Chars[idx])
+
+			prevX = x
+			prevY = y
+			prevFormat = newBuffer.Formats[idx]
 
 			firstDraw = false
 		}
@@ -117,7 +121,6 @@ func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
 
 	newBuffer.CursorFormat.Apply(msg)
 	fmt.Fprintf(msg, "\x1b[%d;%dH", newBuffer.CursorY, newBuffer.CursorX)
-
 	fmt.Fprint(conn, msg.String())
 
 	return newBuffer
@@ -126,7 +129,6 @@ func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
 type Server struct {
 	ln      net.Listener
 	screens sync.Map /* int => Screen */
-	clients int
 
 	TermWidth  uint16
 	TermHeight uint16
@@ -160,20 +162,15 @@ func (s *Server) GetScreen(clientID int) (*Screen, bool) {
 	return v.(*Screen), true
 }
 
-// Returns the number of clients, connected & disconnected.
-func (s *Server) Clients() int {
-	return s.clients
-}
-
 func (s *Server) Run() {
-	s.clients = 0
+	clients := 0
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
 			log.Println("error accepting connection:", err)
 		}
-		s.clients += 1
-		go s.connThread(conn, s.clients-1)
+		clients += 1
+		go s.connThread(conn, clients-1)
 	}
 }
 
@@ -198,7 +195,7 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 
 	buf := make([]byte, 1)
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Second))
+		conn.SetReadDeadline(time.Now().Add(time.Millisecond * 100))
 		_, err := conn.Read(buf)
 		if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 			break
