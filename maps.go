@@ -13,14 +13,6 @@ func (m *Map) Height() uint32 {
 	return uint32(len(m.Data)) / m.Width
 }
 
-func ternary(cond bool, iftrue byte, other byte) byte {
-	if cond {
-		return iftrue
-	} else {
-		return other
-	}
-}
-
 func NewMap(data string) *Map {
 	m := new(Map)
 
@@ -41,13 +33,13 @@ func NewMap(data string) *Map {
 			wallBottom := y == height-1 || lines[y+1][x] == c
 
 			m.Data[3*y*int(m.Width)+3*x] = ' '
-			m.Data[3*y*int(m.Width)+3*x+1] = ternary(wallTop, c, ' ')
+			m.Data[3*y*int(m.Width)+3*x+1] = ternaryByte(wallTop, c, ' ')
 			m.Data[3*y*int(m.Width)+3*x+2] = ' '
-			m.Data[(3*y+1)*int(m.Width)+3*x] = ternary(wallLeft, c, ' ')
+			m.Data[(3*y+1)*int(m.Width)+3*x] = ternaryByte(wallLeft, c, ' ')
 			m.Data[(3*y+1)*int(m.Width)+3*x+1] = c
-			m.Data[(3*y+1)*int(m.Width)+3*x+2] = ternary(wallRight, c, ' ')
+			m.Data[(3*y+1)*int(m.Width)+3*x+2] = ternaryByte(wallRight, c, ' ')
 			m.Data[(3*y+2)*int(m.Width)+3*x] = ' '
-			m.Data[(3*y+2)*int(m.Width)+3*x+1] = ternary(wallBottom, c, ' ')
+			m.Data[(3*y+2)*int(m.Width)+3*x+1] = ternaryByte(wallBottom, c, ' ')
 			m.Data[(3*y+2)*int(m.Width)+3*x+2] = ' '
 		}
 	}

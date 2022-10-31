@@ -4,8 +4,8 @@ import (
 	"github.com/allen-b1/sus-tux/nui"
 )
 
-const MAP_WIDTH = 96
-const MAP_HEIGHT = 48
+const MAP_WIDTH = 128
+const MAP_HEIGHT = 32
 
 type MapWidget struct {
 	X           uint16

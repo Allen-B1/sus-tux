@@ -35,6 +35,39 @@ type State struct {
 	sync.RWMutex
 }
 
+func makeGameScreen(state *State, playerIdx int) *nui.Screen {
+	g := state.game
+	player := &g.Players[playerIdx]
+	return &nui.Screen{
+		Focus: 0,
+		Widgets: []nui.Widget{
+			&MapWidget{
+				X: 0, Y: 4, PlayerColor: nui.Color(playerIdx + 1), Map: g.Map,
+				PlayerX: &player.X, PlayerY: &player.Y, Direction: &player.Direction,
+				PlayerPositions: func() [][2]uint32 {
+					positions := make([][2]uint32, len(g.Players))
+					for playerIdx, player := range g.Players {
+						positions[playerIdx] = [2]uint32{player.X, player.Y}
+					}
+					return positions
+				},
+			},
+			&nui.Label{
+				X: 1, Y: 1, Format: nui.Format{Fg: nui.Color(playerIdx + 61), Bg: nui.Black, Bold: true},
+				Text: state.players[playerIdx].name,
+			},
+			&nui.Label{
+				X: 1, Y: 2, Format: nui.Format{Fg: nui.White, Bg: nui.Black, Bold: true},
+				Text: "Role:",
+			},
+			&nui.Label{
+				X: 1 + 6, Y: 2, Format: nui.Format{Fg: ternaryColor(player.Imposter, nui.LightRed, nui.LightBlue), Bg: nui.Black, Bold: true},
+				Text: ternaryString(player.Imposter, "Impostor", "Crewmate"),
+			},
+		},
+	}
+}
+
 // Update all players' screens after changing a player's name.
 // Memory safety: Locks the given state, as well as all screens except for the one corresponding
 // to targetClientID.
@@ -73,17 +106,15 @@ func startGame(srv *nui.Server, state *State) {
 
 	go func() {
 		var next <-chan time.Time
-		for i := 0; true; i++ {
+		for i := uint(0); true; i++ {
 			next = time.After(time.Millisecond * 50)
 
-			if i%2 == 0 {
-				state.Lock()
-				state.game.Update()
-				state.Unlock()
-			}
+			state.Lock()
+			state.game.Update(i)
+			state.Unlock()
 
 			for clientID, playerIdx := range state.clients {
-				srv.SetScreen(clientID, state.game.makeScreen(playerIdx))
+				srv.SetScreen(clientID, makeGameScreen(state, playerIdx))
 			}
 
 			<-next
@@ -147,7 +178,7 @@ func main() {
 
 	srv := nui.NewServer(ln)
 	srv.TermWidth = 128
-	srv.TermHeight = 64
+	srv.TermHeight = 32 + 4
 	srv.HandleConnect = func(clientID int) {
 		log.Printf("event: connect [%d]\n", clientID)
 

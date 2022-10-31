@@ -12,7 +12,7 @@ import (
 )
 
 func clear(conn net.Conn) {
-	fmt.Fprint(conn, "\x1bc\x1b[40m\x1b[H\x1b[2J\x1b[3J")
+	fmt.Fprint(conn, "\x1bc\x1b[49m\x1b[H\x1b[2J\x1b[3J")
 }
 
 // Type Buffer represents information about
@@ -26,9 +26,9 @@ type Buffer struct {
 	CursorFormat     Format
 }
 
-// Buffer initialized to all spaces, with a black background
-// and white foreground.
-func emptyBuffer(width uint16, height uint16) *Buffer {
+// Buffer initialized to all spaces, with the given background color
+// and a Default foreground.
+func emptyBuffer(width uint16, height uint16, bg Color) *Buffer {
 	buffer := &Buffer{
 		Width:   width,
 		Formats: make([]Format, width*height),
@@ -36,12 +36,12 @@ func emptyBuffer(width uint16, height uint16) *Buffer {
 	}
 
 	for i, _ := range buffer.Formats {
-		buffer.Formats[i] = Format{Fg: LightWhite, Bg: Black}
+		buffer.Formats[i] = Format{Fg: Default, Bg: bg}
 	}
 	for i, _ := range buffer.Chars {
 		buffer.Chars[i] = ' '
 	}
-	buffer.CursorFormat = Format{Fg: LightWhite, Bg: Black}
+	buffer.CursorFormat = Format{Fg: Default, Bg: bg}
 	return buffer
 }
 
@@ -78,7 +78,7 @@ type Screen struct {
 }
 
 func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
-	newBuffer := emptyBuffer(oldBuffer.Width, uint16(len(oldBuffer.Chars))/oldBuffer.Width)
+	newBuffer := emptyBuffer(oldBuffer.Width, uint16(len(oldBuffer.Chars))/oldBuffer.Width, Black)
 
 	for idx, widget := range s.Widgets {
 		if idx == s.Focus {
@@ -94,7 +94,7 @@ func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
 
 	// diff
 	var prevFormat Format
-	var prevX, prevY uint16
+	//var prevX, prevY uint16
 	firstDraw := true
 	msg := new(strings.Builder)
 	for idx := 0; idx < len(oldBuffer.Chars); idx++ {
@@ -102,25 +102,27 @@ func (s *Screen) Draw(conn net.Conn, oldBuffer *Buffer) *Buffer {
 			x := uint16(idx % int(oldBuffer.Width))
 			y := uint16(idx / int(oldBuffer.Width))
 
-			if firstDraw || !(prevX+1 == x && prevY == y) {
-				fmt.Fprintf(msg, "\x1b[%d;%dH", y, x)
-			}
+			//if firstDraw || !(prevX+1 == x && prevY == y) {
+			//	fmt.Fprintf(msg, "\x1b[%d;%dH", y+1, x+1)
+			//}
 			if firstDraw || prevFormat != newBuffer.Formats[idx] {
 				newBuffer.Formats[idx].Apply(msg)
 			}
 
+			fmt.Fprintf(msg, "\x1b[%d;%dH", y+1, x+1)
+			//newBuffer.Formats[idx].Apply(msg)
 			fmt.Fprintf(msg, "%c", newBuffer.Chars[idx])
 
-			prevX = x
-			prevY = y
+			//prevX = x
+			//prevY = y
 			prevFormat = newBuffer.Formats[idx]
-
+			//
 			firstDraw = false
 		}
 	}
 
 	newBuffer.CursorFormat.Apply(msg)
-	fmt.Fprintf(msg, "\x1b[%d;%dH", newBuffer.CursorY, newBuffer.CursorX)
+	fmt.Fprintf(msg, "\x1b[%d;%dH", newBuffer.CursorY+1, newBuffer.CursorX+1)
 	fmt.Fprint(conn, msg.String())
 
 	return newBuffer
@@ -190,12 +192,12 @@ func (s *Server) connThread(conn net.Conn, clientID int) {
 	}
 	screen := screenI.(*Screen)
 
-	buffer := emptyBuffer(s.TermWidth, s.TermHeight)
+	buffer := emptyBuffer(s.TermWidth, s.TermHeight, Default)
 	buffer = screen.Draw(conn, buffer)
 
 	buf := make([]byte, 1)
 	for {
-		conn.SetReadDeadline(time.Now().Add(time.Millisecond * 100))
+		conn.SetReadDeadline(time.Now().Add(time.Millisecond * 50))
 		_, err := conn.Read(buf)
 		if err != nil && !errors.Is(err, os.ErrDeadlineExceeded) {
 			break
