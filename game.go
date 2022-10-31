@@ -20,6 +20,7 @@ type Task interface {
 type GamePlayer struct {
 	X, Y         uint32
 	Dead         bool
+	Corpse       [2]uint32 // undefined <-> !dead
 	Disconnected bool
 	Imposter     bool
 
@@ -74,16 +75,24 @@ func NewGame(nplayers int, map_ *Map) *Game {
 }
 
 func (g *Game) Update(step uint) {
-	for i := range g.Players {
+	for i, player := range g.Players {
 		x := g.Players[i].UpdatePositionX()
 		y := g.Players[i].Y
 		if step%2 == 0 {
 			y = g.Players[i].UpdatePositionY()
 		}
 		c := g.Map.Data[y*g.Map.Width+x]
-		if c == ' ' {
+		if c == ' ' || player.Dead {
 			g.Players[i].X = x
 			g.Players[i].Y = y
 		}
+	}
+}
+
+func (g *Game) Kill(playerIdx int) {
+	g.Players[playerIdx].Dead = true
+	g.Players[playerIdx].Corpse = [2]uint32{
+		g.Players[playerIdx].X,
+		g.Players[playerIdx].Y,
 	}
 }

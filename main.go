@@ -43,25 +43,33 @@ func makeGameScreen(state *State, playerIdx int) *nui.Screen {
 		Widgets: []nui.Widget{
 			&MapWidget{
 				X: 0, Y: 4, PlayerColor: nui.Color(playerIdx + 1), Map: g.Map,
-				PlayerX: &player.X, PlayerY: &player.Y, Direction: &player.Direction,
-				PlayerPositions: func() [][2]uint32 {
-					positions := make([][2]uint32, len(g.Players))
-					for playerIdx, player := range g.Players {
-						positions[playerIdx] = [2]uint32{player.X, player.Y}
+				Player:  player,
+				Players: state.game.Players,
+				KillHandler: func() {
+					if player.Dead || !player.Imposter {
+						return
 					}
-					return positions
+
+					for i, target := range state.game.Players {
+						if i == playerIdx {
+							continue
+						}
+						if (target.X-player.X)*(target.X-player.X)+(target.Y-player.Y)*(target.Y-player.Y) <= KILL_RADIUS*KILL_RADIUS {
+							g.Kill(i)
+						}
+					}
 				},
 			},
 			&nui.Label{
-				X: 1, Y: 1, Format: nui.Format{Fg: nui.Color(playerIdx + 61), Bg: nui.Black, Bold: true},
+				X: 2, Y: 1, Format: nui.Format{Fg: nui.Color(playerIdx + 1), Bg: nui.Black},
 				Text: state.players[playerIdx].name,
 			},
 			&nui.Label{
-				X: 1, Y: 2, Format: nui.Format{Fg: nui.White, Bg: nui.Black, Bold: true},
+				X: 2, Y: 2, Format: nui.Format{Fg: nui.White, Bg: nui.Black},
 				Text: "Role:",
 			},
 			&nui.Label{
-				X: 1 + 6, Y: 2, Format: nui.Format{Fg: ternaryColor(player.Imposter, nui.LightRed, nui.LightBlue), Bg: nui.Black, Bold: true},
+				X: 2 + 6, Y: 2, Format: nui.Format{Fg: ternaryColor(player.Imposter, nui.LightRed, nui.LightBlue), Bg: nui.Black, Bold: true},
 				Text: ternaryString(player.Imposter, "Impostor", "Crewmate"),
 			},
 		},

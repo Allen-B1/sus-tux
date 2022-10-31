@@ -4,6 +4,8 @@ import (
 	"github.com/allen-b1/sus-tux/nui"
 )
 
+const KILL_RADIUS = 3
+
 const MAP_WIDTH = 128
 const MAP_HEIGHT = 32
 
@@ -13,18 +15,19 @@ type MapWidget struct {
 	PlayerColor nui.Color
 	Map         *Map
 
-	PlayerX, PlayerY *uint32
-	Direction        *[2]int8
+	Player *GamePlayer
+	// Readonly
+	Players []GamePlayer
 
 	// Required
-	PlayerPositions func() [][2]uint32
+	KillHandler func()
 }
 
 func (m *MapWidget) Draw(buf *nui.Buffer) {
 	// Position of the map
 	// where the top-left corner is
-	offX := int32(*m.PlayerX) - MAP_WIDTH/2
-	offY := int32(*m.PlayerY) - MAP_HEIGHT/2
+	offX := int32(m.Player.X) - MAP_WIDTH/2
+	offY := int32(m.Player.Y) - MAP_HEIGHT/2
 
 	for x := m.X; x < m.X+MAP_WIDTH; x++ {
 		for y := m.Y; y < m.Y+MAP_HEIGHT; y++ {
@@ -54,10 +57,13 @@ func (m *MapWidget) Draw(buf *nui.Buffer) {
 		}
 	}
 
-	positions := m.PlayerPositions()
-	for playerIdx, position := range positions {
-		mapX := position[0]
-		mapY := position[1]
+	for playerIdx, player := range m.Players {
+		mapX := player.X
+		mapY := player.Y
+		if player.Dead {
+			mapX = player.Corpse[0]
+			mapY = player.Corpse[1]
+		}
 
 		viewX := int32(mapX) - offX
 		viewY := int32(mapY) - offY
@@ -66,28 +72,42 @@ func (m *MapWidget) Draw(buf *nui.Buffer) {
 		}
 
 		idx := buf.Index(uint16(viewX)+m.X, uint16(viewY)+m.Y)
-		buf.Chars[idx] = 'x'
-		buf.Formats[idx] = nui.Format{Fg: nui.Color(playerIdx + 1), Bg: nui.LightWhite}
+		buf.Chars[idx] = ternaryByte(player.Dead, 'x', 'o')
+		if nui.Color(playerIdx+1) != m.PlayerColor {
+			buf.Formats[idx] = nui.Format{Fg: nui.Color(playerIdx + 1), Bg: nui.LightWhite}
+			if m.Player.Imposter && !m.Player.Dead && !player.Dead {
+				if (m.Player.X-player.X)*(m.Player.X-player.X)+(m.Player.Y-player.Y)*(m.Player.Y-player.Y) <= KILL_RADIUS*KILL_RADIUS {
+					buf.Formats[idx].Bg = nui.LightRed
+				}
+			}
+		} else {
+			if !player.Dead {
+				buf.Formats[idx] = nui.Format{Fg: nui.LightWhite, Bg: m.PlayerColor, Bold: true}
+			} else {
+				buf.Formats[idx] = nui.Format{Fg: m.PlayerColor, Bg: nui.LightWhite}
+			}
+		}
 	}
 
 	buf.CursorX = m.X + MAP_WIDTH/2
 	buf.CursorY = m.Y + MAP_HEIGHT/2
-	buf.CursorFormat = nui.Format{Bg: m.PlayerColor, Fg: nui.LightWhite}
+	buf.CursorFormat = nui.Format{Bg: nui.LightWhite, Fg: m.PlayerColor}
 }
 
 func (m *MapWidget) Focus(focus bool) {}
 
 func (m *MapWidget) Keypress(ch byte) {
 	if ch == 'w' {
-		*m.Direction = [2]int8{0, -1}
+		m.Player.Direction = [2]int8{0, -1}
 	} else if ch == 's' {
-		*m.Direction = [2]int8{0, 1}
+		m.Player.Direction = [2]int8{0, 1}
 	} else if ch == 'a' {
-		*m.Direction = [2]int8{-1, 0}
+		m.Player.Direction = [2]int8{-1, 0}
 	} else if ch == 'd' {
-		*m.Direction = [2]int8{1, 0}
+		m.Player.Direction = [2]int8{1, 0}
 	} else if ch == 'q' {
-		m.Direction[0] = 0
-		m.Direction[1] = 0
+		m.Player.Direction = [2]int8{0, 0}
+	} else if ch == 'k' {
+		m.KillHandler()
 	}
 }
